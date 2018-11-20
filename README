@@ -1,0 +1,4 @@
+This is a tool to show the linux kernel memory status.
+
+The /proc and /sys is not firiendly to me.
+Use this tool to show the status by GUI.
