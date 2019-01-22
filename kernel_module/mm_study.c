@@ -7,28 +7,37 @@
 #include <linux/module.h>
 #include <linux/kprobes.h>
 
-#define log(a, ...) printk("[ %s: %s : %.3d ] "a"\n", \
-				__FILE__, __FUNCTION__, __LINE__,  ## __VA_ARGS__)
+#define log(a, ...) printk("[ %s : %.3d ] "a"\n", \
+				__func__, __LINE__,  ## __VA_ARGS__)
+
+#define func_name	"__isolate_lru_page"
 
 static int kp_pre_handler(struct kprobe *p, struct pt_regs *regs)
 {
+	struct page *page;
+	int mode;
 	/*
 	 * @di is the first parameter, @si is the second.
 	 *
 	 * log("%lx, 2:%lx", regs->di, regs->si);
 	 */
 	//dump_stack();
+	page = (struct page*)(regs->di);
+	mode = regs->si;
+
+	printk("[%s] page : %lx, mode: %d page flags: %lx, map count: %d, page count: %d", func_name,
+		(unsigned long)page, mode, page->flags, page_mapcount(page), page_count(page));
 	return 0;
 }
 
 static void kp_post_handler(struct kprobe *p, struct pt_regs *regs,
 		unsigned long flags)
 {
-	log();
+	//log();
 }
 
 static struct kprobe kp = {
-	.symbol_name = "__isolate_lru_page",
+	.symbol_name = func_name,
 	.pre_handler = kp_pre_handler,
 	.post_handler = kp_post_handler
 };
