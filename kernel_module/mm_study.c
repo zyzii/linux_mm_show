@@ -25,7 +25,7 @@ static int kp_pre_handler(struct kprobe *p, struct pt_regs *regs)
 	page = (struct page*)(regs->di);
 	mode = regs->si;
 
-	printk("[%s] page : %lx, mode: %d page flags: %lx, map count: %d, page count: %d", func_name,
+	printk("[%s] page : %lx, mode: %d page flags: %.16lx, map count: %d, page count: %d", func_name,
 		(unsigned long)page, mode, page->flags, page_mapcount(page), page_count(page));
 	return 0;
 }
