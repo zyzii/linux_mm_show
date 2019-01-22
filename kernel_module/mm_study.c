@@ -12,7 +12,11 @@
 
 static int kp_pre_handler(struct kprobe *p, struct pt_regs *regs)
 {
-	log();
+	/*
+	 * @di is the first parameter, @si is the second.
+	 *
+	 * log("%lx, 2:%lx", regs->di, regs->si);
+	 */
 	//dump_stack();
 	return 0;
 }
