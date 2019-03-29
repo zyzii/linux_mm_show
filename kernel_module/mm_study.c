@@ -11,7 +11,6 @@
 #define log(a, ...) printk("[ %s : %.3d ] "a"\n", \
 				__func__, __LINE__,  ## __VA_ARGS__)
 
-#define func_name	"__isolate_lru_page"
 
 #define __def_gfpflag_names						\
 	{(unsigned long)GFP_TRANSHUGE,		"GFP_TRANSHUGE"},	\
@@ -88,7 +87,6 @@
 	{1UL << PG_dirty,		"dirty"		},		\
 	{1UL << PG_lru,			"lru"		},		\
 	{1UL << PG_active,		"active"	},		\
-	{1UL << PG_workingset,		"workingset"	},		\
 	{1UL << PG_slab,		"slab"		},		\
 	{1UL << PG_owner_priv_1,	"owner_priv_1"	},		\
 	{1UL << PG_arch_1,		"arch_1"	},		\
@@ -141,6 +139,7 @@ static char *show_page_flags(unsigned long flags)
 	return sbuf.buffer;
 }
 
+#define func_name	"__isolate_lru_page"
 static int kp_pre_handler(struct kprobe *p, struct pt_regs *regs)
 {
 	struct page *page;
