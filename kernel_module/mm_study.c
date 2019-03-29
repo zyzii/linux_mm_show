@@ -5,6 +5,7 @@
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
+#include <linux/rmap.h>
 #include <linux/kprobes.h>
 #include <linux/seq_buf.h>
 
@@ -139,7 +140,7 @@ static char *show_page_flags(unsigned long flags)
 	return sbuf.buffer;
 }
 
-#define func_name	"__isolate_lru_page"
+#define TEST1_FUNC_NAME	"__isolate_lru_page"
 static int kp_pre_handler(struct kprobe *p, struct pt_regs *regs)
 {
 	struct page *page;
@@ -153,7 +154,7 @@ static int kp_pre_handler(struct kprobe *p, struct pt_regs *regs)
 	page = (struct page*)(regs->di);
 	mode = regs->si;
 
-	printk("[%s] page : %lx, mode: %d flags: %.16lx(%s), map count: %d, page count: %d, (%d, %d)", func_name,
+	printk("[%s] page : %lx, mode: %d flags: %.16lx(%s), map count: %d, page count: %d, (%d, %d)", TEST1_FUNC_NAME,
 		(unsigned long)page, mode, page->flags, show_page_flags(page->flags),
 		page_mapcount(page), page_count(page), PG_reclaim, __NR_PAGEFLAGS);
 	return 0;
@@ -166,10 +167,95 @@ static void kp_post_handler(struct kprobe *p, struct pt_regs *regs,
 }
 
 static struct kprobe kp = {
-	.symbol_name = func_name,
+	.symbol_name = TEST1_FUNC_NAME,
 	.pre_handler = kp_pre_handler,
 	.post_handler = kp_post_handler
 };
+
+/* -------------------------------------- page_referenced_one() -----------*/
+struct page_referenced_arg {
+	int mapcount;
+	int referenced;
+	unsigned long vm_flags;
+	struct mem_cgroup *memcg;
+};
+
+#define TEST2_FUNC_NAME	"page_referenced_one"
+
+static int kp_pre_handler2(struct kprobe *p, struct pt_regs *regs)
+{
+	struct page *page;
+	struct vm_area_struct *vma;
+	unsigned long address;
+	struct page_referenced_arg *arg;
+	unsigned long pfn;
+
+	/*
+	 * @di is the first parameter, @si is the second.
+	 *
+	 * log("%lx, 2:%lx", regs->di, regs->si);
+	 */
+	//dump_stack();
+	page = (struct page*)(regs->di);
+	vma = (struct vm_area_struct *)regs->si;
+	address = regs->dx;
+	arg = (struct page_referenced_arg *)regs->cx;
+
+	pfn = (unsigned long)page_to_pfn(page);
+
+	if (PageAnon(page))
+	printk("[%s] pfn:%#.16lx(%d,%d), vma: %lx(%lx), address:%.16lx, mapcount:%.2d, referenced:%d\n",
+		TEST2_FUNC_NAME, pfn, PageAnon(page), PageKsm(page),
+		(unsigned long)vma, vma->vm_flags, address, arg->mapcount, arg->referenced);
+
+	return 0;
+}
+
+static void kp_post_handler2(struct kprobe *p, struct pt_regs *regs,
+		unsigned long flags)
+{
+	//log();
+}
+
+static struct kprobe kp2 = {
+	.symbol_name = TEST2_FUNC_NAME,
+	.pre_handler = kp_pre_handler2,
+	.post_handler = kp_post_handler2
+};
+
+/* -------------------------------------- check_pte() -----------*/
+#define TEST3_FUNC_NAME	"check_pte"
+
+static int kp_pre_handler3(struct kprobe *p, struct pt_regs *regs)
+{
+	/*
+	 * @di is the first parameter, @si is the second.
+	 *
+	 * log("%lx, 2:%lx", regs->di, regs->si);
+	 */
+	struct page_vma_mapped_walk *pvmw = (struct page_vma_mapped_walk *)(regs->di);
+	pte_t pte;
+
+	if (PageAnon(pvmw->page)) {
+		pte = *pvmw->pte;
+		printk("[%s] pfn: %#.16lx , PTE: %#lx\n", p->symbol_name, page_to_pfn(pvmw->page),
+				*((unsigned long *)&pte));
+	}
+
+	return 0;
+}
+
+
+static struct kprobe kp3 = {
+	.symbol_name = TEST3_FUNC_NAME,
+	.pre_handler = kp_pre_handler3,
+};
+
+/* -------------------------------------- end here  -----------*/
+
+static int test_isolate_lru_page;
+static int test_page_referenced_one = 1;
+static int test_check_pte = 1;
 
 static int __init mm_study(void)
 {
@@ -179,10 +265,28 @@ static int __init mm_study(void)
 	if (!sbuf.buffer)
 		return -ENOMEM;
 
-	ret = register_kprobe(&kp);
-	if (ret < 0) {
-		pr_err("register_kprobe returned %d\n", ret);
-		return ret;
+	if (test_isolate_lru_page) {
+		ret = register_kprobe(&kp);
+		if (ret < 0) {
+			pr_err("register_kprobe returned %d\n", ret);
+			return ret;
+		}
+	}
+
+	if (test_page_referenced_one) {
+		ret = register_kprobe(&kp2);
+		if (ret < 0) {
+			pr_err("register_kprobe returned %d\n", ret);
+			return ret;
+		}
+	}
+
+	if (test_check_pte) {
+		ret = register_kprobe(&kp3);
+		if (ret < 0) {
+			pr_err("register_kprobe returned %d\n", ret);
+			return ret;
+		}
 	}
 
 	return ret;
@@ -193,7 +297,12 @@ static void __exit mm_study_exit(void)
 	log("---------------- bye world ---------------------");
 	kfree(sbuf.buffer);
 	sbuf.buffer = NULL;
-	unregister_kprobe(&kp);
+	if (test_isolate_lru_page)
+		unregister_kprobe(&kp);
+	if (test_page_referenced_one)
+		unregister_kprobe(&kp2);
+	if (test_check_pte)
+		unregister_kprobe(&kp3);
 }
 
 module_init(mm_study);
