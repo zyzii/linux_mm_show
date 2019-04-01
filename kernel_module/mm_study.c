@@ -182,14 +182,21 @@ struct page_referenced_arg {
 
 #define TEST2_FUNC_NAME	"page_referenced_one"
 
-static int kp_pre_handler2(struct kprobe *p, struct pt_regs *regs)
+struct my_data {
+	void *p;
+	struct page *page;
+};
+
+static int entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	struct page *page;
 	struct vm_area_struct *vma;
 	unsigned long address;
 	struct page_referenced_arg *arg;
 	unsigned long pfn;
+	struct my_data *data;
 
+	data = (struct my_data *)ri->data;
 	/*
 	 * @di is the first parameter, @si is the second.
 	 *
@@ -208,19 +215,30 @@ static int kp_pre_handler2(struct kprobe *p, struct pt_regs *regs)
 		TEST2_FUNC_NAME, pfn, PageAnon(page), PageKsm(page),
 		(unsigned long)vma, vma->vm_flags, address, arg->mapcount, arg->referenced);
 
+	/* keep it here */
+	data->p = arg;
+	data->page = page;
 	return 0;
 }
 
-static void kp_post_handler2(struct kprobe *p, struct pt_regs *regs,
-		unsigned long flags)
+static int ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	//log();
+	struct my_data *data = (struct my_data *)ri->data;
+	struct page_referenced_arg *arg = data->p;
+	struct page *page = data->page;
+
+	if (PageAnon(page))
+	printk("[%s post] mapcount:%.2d, referenced:%d\n",
+		TEST2_FUNC_NAME, arg->mapcount, arg->referenced);
+	return 0;
 }
 
-static struct kprobe kp2 = {
-	.symbol_name = TEST2_FUNC_NAME,
-	.pre_handler = kp_pre_handler2,
-	.post_handler = kp_post_handler2
+static struct kretprobe my_kretprobe = {
+	.handler		= ret_handler,
+	.entry_handler		= entry_handler,
+	.data_size		= sizeof(struct my_data),
+	/* Probe up to 20 instances concurrently. */
+	.maxactive		= 20
 };
 
 /* -------------------------------------- check_pte() -----------*/
@@ -274,11 +292,15 @@ static int __init mm_study(void)
 	}
 
 	if (test_page_referenced_one) {
+		/*
 		ret = register_kprobe(&kp2);
 		if (ret < 0) {
 			pr_err("register_kprobe returned %d\n", ret);
 			return ret;
 		}
+		*/
+		my_kretprobe.kp.symbol_name = TEST2_FUNC_NAME;
+		ret = register_kretprobe(&my_kretprobe);
 	}
 
 	if (test_check_pte) {
@@ -299,8 +321,10 @@ static void __exit mm_study_exit(void)
 	sbuf.buffer = NULL;
 	if (test_isolate_lru_page)
 		unregister_kprobe(&kp);
-	if (test_page_referenced_one)
-		unregister_kprobe(&kp2);
+	if (test_page_referenced_one) {
+		//unregister_kprobe(&kp2);
+		unregister_kretprobe(&my_kretprobe);
+	}
 	if (test_check_pte)
 		unregister_kprobe(&kp3);
 }
