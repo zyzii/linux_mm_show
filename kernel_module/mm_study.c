@@ -8,6 +8,9 @@
 #include <linux/rmap.h>
 #include <linux/kprobes.h>
 #include <linux/seq_buf.h>
+#include <linux/swap.h>
+#include <linux/swapops.h>
+#include <linux/mm_inline.h>
 
 #define log(a, ...) printk("[ %s : %.3d ] "a"\n", \
 				__func__, __LINE__,  ## __VA_ARGS__)
@@ -252,12 +255,20 @@ static int kp_pre_handler3(struct kprobe *p, struct pt_regs *regs)
 	 * log("%lx, 2:%lx", regs->di, regs->si);
 	 */
 	struct page_vma_mapped_walk *pvmw = (struct page_vma_mapped_walk *)(regs->di);
-	pte_t pte;
+	pte_t pte = *pvmw->pte;
+	swp_entry_t entry;
 
-	if (PageAnon(pvmw->page)) {
-		pte = *pvmw->pte;
+	if (0 && is_swap_pte(pte)) {
+		entry = pte_to_swp_entry(pte);
+		printk("[%s] pfn: %#.16lx ,lru:%d, PTE: %#lx, SWAP PTE:%#lx, type: %x, \n", p->symbol_name, page_to_pfn(pvmw->page),
+				page_lru(pvmw->page), *((unsigned long *)&pte),
+				*((unsigned long *)&entry), swp_type(entry));
+	} else if (PageAnon(pvmw->page) && 0) {
 		printk("[%s] pfn: %#.16lx , PTE: %#lx\n", p->symbol_name, page_to_pfn(pvmw->page),
 				*((unsigned long *)&pte));
+	} else if (PageCompound(pvmw->page)) {
+		printk("[%s] we got the compound page now:\n", p->symbol_name);
+
 	}
 
 	return 0;
@@ -272,7 +283,7 @@ static struct kprobe kp3 = {
 /* -------------------------------------- end here  -----------*/
 
 static int test_isolate_lru_page;
-static int test_page_referenced_one = 1;
+static int test_page_referenced_one = 0;
 static int test_check_pte = 1;
 
 static int __init mm_study(void)
