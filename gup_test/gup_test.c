@@ -14,6 +14,7 @@
 
 dev_t cdevno;
 struct cdev my_cdev;
+#define PAGE_NUM 4
 
 static ssize_t gup_test_write(struct file *file, const char __user * buf,
                               size_t count, loff_t * pos)
@@ -27,11 +28,27 @@ static ssize_t gup_test_write(struct file *file, const char __user * buf,
 static ssize_t gup_test_read(struct file *file, char __user * buf,
                              size_t count, loff_t * pos)
 {
-	pr_info("%s -----------\n", __func__);
-	if (count == 0)
-		return 0;
-        //return epu_dma_block_rx(file, buf, count, pos);
-        return count;
+	struct page **page_array;
+	int n, i;
+
+	page_array = kzalloc(sizeof(struct page *) * PAGE_NUM, GFP_KERNEL);
+	if (!page_array)
+		return -ENOMEM;
+
+	n = get_user_pages_fast((unsigned long)buf, PAGE_NUM, FOLL_WRITE, page_array);
+	pr_info("%s --------n :%d---\n", __func__, n);
+
+	/* rest now */
+	for (i = 0; i < n; i++) {
+		if (page_array[i]) {
+			printk("[%s: %d] pfn: %#lx\n", __func__, i, page_to_pfn(page_array[i]));
+			put_page(page_array[i]);
+		}
+	}
+
+	kfree(page_array);
+	//return epu_dma_block_rx(file, buf, count, pos);
+	return count;
 }
 
 static int gup_test_open(struct inode *inode, struct file *file)

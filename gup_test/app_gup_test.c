@@ -60,6 +60,9 @@ int main()
 			printf("\tpage %d: < empty >\n", i);
 	}
 
+	/* Finially, we do the read now, it is DMA read in the driver. */
+	read(fd, buf, pagesize * PAGE_NUM);
+
 	free(buf);
 err:
 	close(pfn_fd);
