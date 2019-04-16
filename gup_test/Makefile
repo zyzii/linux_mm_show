@@ -26,6 +26,7 @@ PWD       := $(shell pwd)
 
 modules:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) LDDINC=$(PWD) modules
+	gcc -g app_gup_test.c -o test
 
 endif
 

@@ -15,24 +15,45 @@
 dev_t cdevno;
 struct cdev my_cdev;
 
-static int epu_ctrl_open(struct inode *inode, struct file *file)
+static ssize_t gup_test_write(struct file *file, const char __user * buf,
+                              size_t count, loff_t * pos)
+{
+	pr_info("%s -----------\n", __func__);
+	if (count == 0)
+		return 0;
+        return count;
+}
+
+static ssize_t gup_test_read(struct file *file, char __user * buf,
+                             size_t count, loff_t * pos)
+{
+	pr_info("%s -----------\n", __func__);
+	if (count == 0)
+		return 0;
+        //return epu_dma_block_rx(file, buf, count, pos);
+        return count;
+}
+
+static int gup_test_open(struct inode *inode, struct file *file)
 {
 	file->private_data = NULL;
+	pr_info("%s -----------\n", __func__);
 	return 0;
 }
 
-static int epu_ctrl_close(struct inode *inode, struct file *file)
+static int gup_test_close(struct inode *inode, struct file *file)
 {
 	file->private_data = NULL;
+	pr_info("%s -----------\n", __func__);
 	return 0;
 }
 
 static const struct file_operations gup_test_fops = {
 	.owner = THIS_MODULE,
-	.open = epu_ctrl_open,
-	.release = epu_ctrl_close,
-	//.write = epu_ctrl_write,
-	//.read = epu_ctrl_read,
+	.open = gup_test_open,
+	.release = gup_test_close,
+	.write = gup_test_write,
+	.read = gup_test_read,
 };
 
 static struct class *gup_class;
